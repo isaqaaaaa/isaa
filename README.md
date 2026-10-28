@@ -68,12 +68,14 @@ npm start
 Ожидаемое сообщение после загрузки настроек:
 
 ```text
-Server listening on port 3000
+Server listening at http://127.0.0.1:3000
 ```
 
-Оставьте это окно открытым. Адрес сервера: `http://localhost:3000`. Для остановки нажмите **Ctrl+C**. После изменения `.env` остановите и запустите сервер заново.
+Оставьте это окно открытым. Адрес сервера: `http://127.0.0.1:3000`. Для остановки нажмите **Ctrl+C**. После изменения `.env` остановите и запустите сервер заново.
 
-Открытие адреса в браузере может показать `Cannot GET /`: страница и маршрут `GET /` не реализованы. Для работы используйте `POST /generate-prompt`.
+Сервер явно слушает только `127.0.0.1` — локальный IPv4-адрес этого компьютера (localhost). Прямые подключения с других устройств по сети не принимаются. Это важно, потому что `/generate-prompt` использует ваш ключ Anthropic и не требует авторизации: доступ к серверу может приводить к платным API-запросам. Привязка к localhost ограничивает сетевой доступ, но не запрещает обращения от программ на вашем компьютере. Порт по умолчанию — `3000`; настройка `PORT` меняет только порт, а адрес остаётся `127.0.0.1`.
+
+Сейчас открытие адреса в браузере покажет `Cannot GET /`: страница и маршрут `GET /` ещё не реализованы. Для работы используйте `POST /generate-prompt`. После добавления веб-интерфейса на этом сервере запускайте приложение той же командой `npm start` и открывайте **http://127.0.0.1:3000** в браузере на том же компьютере. Если изменили `PORT`, замените `3000` на выбранный порт. Числовой адрес позволяет избежать разрешения имени `localhost` в IPv6-адрес `::1`.
 
 ## 5. Отправьте математическую тему из PowerShell
 
@@ -84,7 +86,7 @@ $body = @{
     rawText = "Миа и Гус объясняют, почему минус на минус даёт плюс. Короткий рисованный математический мультфильм с движущимися числами."
 } | ConvertTo-Json -Compress
 
-$response = Invoke-RestMethod -Uri "http://localhost:3000/generate-prompt" -Method Post -ContentType "application/json; charset=utf-8" -Body ([System.Text.Encoding]::UTF8.GetBytes($body))
+$response = Invoke-RestMethod -Uri "http://127.0.0.1:3000/generate-prompt" -Method Post -ContentType "application/json; charset=utf-8" -Body ([System.Text.Encoding]::UTF8.GetBytes($body))
 $response.prompt
 ```
 
@@ -120,7 +122,7 @@ $body = @{
     target = "flow"
 } | ConvertTo-Json -Compress
 
-$response = Invoke-RestMethod -Uri "http://localhost:3000/generate-prompt" -Method Post -ContentType "application/json; charset=utf-8" -Body ([System.Text.Encoding]::UTF8.GetBytes($body))
+$response = Invoke-RestMethod -Uri "http://127.0.0.1:3000/generate-prompt" -Method Post -ContentType "application/json; charset=utf-8" -Body ([System.Text.Encoding]::UTF8.GetBytes($body))
 $response.prompt
 $response.prompt | Set-Clipboard
 ```
@@ -141,7 +143,7 @@ $response.prompt | Set-Clipboard
 
 ```powershell
 try {
-    Invoke-RestMethod -Uri "http://localhost:3000/generate-prompt" -Method Post -ContentType "application/json" -Body "{}" -ErrorAction Stop
+    Invoke-RestMethod -Uri "http://127.0.0.1:3000/generate-prompt" -Method Post -ContentType "application/json" -Body "{}" -ErrorAction Stop
     throw "Проверка не пройдена: ожидался HTTP 400."
 } catch {
     if ($null -eq $_.Exception.Response) { throw }
@@ -186,8 +188,10 @@ npm test
 
 Тесты используют встроенный `node:test` (Node.js 24 из инструкции выше), подставной клиент Anthropic и объекты запроса/ответа обработчика. Настоящий ключ, `.env`, интернет и установка дополнительных тестовых библиотек не требуются. Проверяются параметры запросов обоих режимов, сохранение исходной инструкции Omniflash, валидация входных данных, HTTP-статусы обработчика 200/400/500/504, пустые и обрезанные ответы, ошибки API и тайм-ауты. Клиент Anthropic загружается только при настоящей генерации.
 
+Дополнительно `network.test.js` запускает настоящий `index.js` в отдельном процессе, подменяя Express и dotenv через встроенные модульные хуки Node.js 24. Подставной Express передаёт аргументы прослушивания настоящему TCP-серверу Node.js: проверяются адрес `127.0.0.1` и семейство IPv4. Тест проверяет порт по умолчанию `3000` и пользовательский `PORT=3001`, а для открытия сокета использует свободный временный порт, чтобы не конфликтовать с запущенным приложением. Локальный `.env` не читается, ключ очищается, импорт Anthropic SDK запрещён. Это проверка сетевой конфигурации запуска, а не интеграционный HTTP-тест Express.
+
 ## Статус проверки изменений
 
-27 октября 2026 года: на Node.js 24.22.1 прошли все 8 автоматических тестов, синтаксис JavaScript проверен через `node --check`. Новые зависимости не добавлены, `npm start` и настройки модели сохранены.
+28 октября 2026 года: на Node.js 24.22.1 прошли все 10 автоматических тестов: 8 существующих и 2 проверки локальной сетевой конфигурации. Новые зависимости не добавлены; команда `npm start`, маршрут `/generate-prompt`, оба режима и настройки модели сохранены.
 
-Установка зависимостей через `npm ci` в среде проверки заблокирована HTTP 403 от npm registry. Поэтому проверена логика сервиса и обработчика с подставным клиентом, но запуск настоящего Express-сервера и HTTP-запросы через сеть не подтверждены. Реальные обращения к Anthropic и качество результата Google Flow без ключа не проверялись.
+Установка зависимостей через `npm ci` в среде проверки заблокирована HTTP 403 от npm registry. Проверены логика сервиса и обработчика с подставным клиентом и реальная привязка TCP-сокета через подставной Express. Запуск настоящего Express-сервера и HTTP-запросы к нему в этой среде не подтверждены. Реальные обращения к Anthropic и качество результата Google Flow не проверялись.

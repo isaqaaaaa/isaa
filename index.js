@@ -6,6 +6,7 @@ dotenv.config();
 
 const app = express();
 const port = process.env.PORT || 3000;
+const host = '127.0.0.1';
 
 // Middleware to parse JSON request bodies
 app.use(express.json());
@@ -14,7 +15,6 @@ app.use(express.json());
 app.post('/generate-prompt', createPromptHandler());
 
 // Start the server
-app.listen(port, () => {
-    console.log(`Server listening on port ${port}`);
+app.listen(port, host, () => {
+    console.log(`Server listening at http://${host}:${port}`);
 });
-
